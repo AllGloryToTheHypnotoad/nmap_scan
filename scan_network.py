@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+#
+# Kevin J. Walchko
+# created: 7 Sept 2014
+#
 
 import nmap
 #import optparse
@@ -9,6 +13,7 @@ from awake import wol
 import pymongo
 import pprint
 import datetime
+import time
 import logging
 import re
 import uuid
@@ -24,6 +29,11 @@ def exist(db,doc):
 	if num > 0: ans = True
 	return ans
 
+"""
+Search db for MAC address
+in: db and query_doc
+out: boolean and MAC address
+"""
 def getMAC(db,doc):
 	rec = db.network.find_one( doc )
 	if not rec:
@@ -31,6 +41,35 @@ def getMAC(db,doc):
 	return True, rec['mac']
 
 """
+ Only need the first 3 parts of the IP address
+ TODO: change name, sucks!
+"""
+def getIP():
+	ip = socket.gethostbyname(socket.gethostname())
+	i=ip.split('.')
+	ip = i[0]+'.'+i[1]+'.'+i[2]+'.'
+	return ip
+
+"""
+Need to get the localhost IP address 
+in: none
+out: returns the host machine's IP address
+"""
+def getLocalIP():
+	ip = socket.gethostbyname(socket.gethostname())
+	return ip
+
+"""
+Major flaw doesn't allow you to get the localhost's MAC address
+in: none
+out: string of hex for MAC address 'aa:bb:11:22..'
+"""
+def getLocalMAC():
+	return  ':'.join(re.findall('..', '%012x' % uuid.getnode()))
+
+"""
+Given the output from nmap, turn it into a dict for mongo. Note, have to convert keys
+to strings (e.g., port numbers)
 in: nmap host info
 out: dict
 """
@@ -86,7 +125,7 @@ def nmapScan(host,db):
 			if getLocalIP() == host:
 				#log.error("[-] can't grab MAC of localhost -- FIXME!!")
 				log.info("[*] can't grab MAC of localhost -- fixing manually")
-				mac = ':'.join(re.findall('..', '%012x' % uuid.getnode()))
+				mac = getLocalMAC()
 				h['addresses']['mac'] = mac
 			else:
 				log.error('[-] ERROR: Need to run this program as root')
@@ -106,23 +145,6 @@ def nmapScan(host,db):
 		comp = formatDoc(h)
 		comp['lastseen'] = datetime.datetime.now()
 		db.network.insert(comp)
-	
-
-# Only need the first 3 parts of the IP address
-# TODO: change name, sucks!
-def getIP():
-	ip = socket.gethostbyname(socket.gethostname())
-	i=ip.split('.')
-	ip = i[0]+'.'+i[1]+'.'+i[2]+'.'
-	return ip
-
-"""
-in: none
-out: returns the host machine's IP address
-"""
-def getLocalIP():
-	ip = socket.gethostbyname(socket.gethostname())
-	return ip
 
 """
 TODO: 
@@ -139,7 +161,6 @@ def main():
 	# setup logger that processes will attach too
 	logging.basicConfig(level=logging.INFO)
 	log = logging.getLogger('nmapScan')
-	#log.setLevel(logging.INFO)
 	
 	# create file handler
  	fh = logging.FileHandler('nmapScan.log')
@@ -156,7 +177,7 @@ def main():
 	
 	try:
 		jobs=[]
-		for i in range(1,20):
+		for i in range(1,250):
 			host = ip + str(i)
 			
 			ret,mac = getMAC(db, {'ip': host} )

@@ -114,3 +114,24 @@ pprint.pprint(host['scan'])
                                   'state': u'open',
                                   'version': u'1.6.2'}},
                   'vendor': {}}}
+
+
+
+-----------
+***Self­signed SSL certificat and key
+Step 1: Generate a Private Key
+$ openssl genrsa ­des3 ­out server.key 1024
+Step 2: Generate a CSR (Certificate Signing Request) $ openssl req ­new ­key server.key ­out server.csr
+­ fill in fields as you wish
+Step 3: Remove Passphrase from Key
+$ cp server.key server.key.org
+$ openssl rsa ­in server.key.org ­out server.key
+Step 4: Generating a Self­Signed Certificate
+$ openssl x509 ­req ­days 365 ­in server.csr ­signkey server.key ­out server.crt
+Step 5: Usage
+­ you now have a "server.key" and a "server.crt" that can be used in you SSL applications
+NOTES :
+To test a webserver SSL(certificates):
+openssl s_client ­connect 127.0.0.1:5000
+openssl s_client ­port 5000 ­CApath /usr/share/ssl/certs/ ­host 127.0.0.1 ­prexit
+
