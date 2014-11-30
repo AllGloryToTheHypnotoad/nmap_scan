@@ -1,2 +1,7 @@
 old
 db
+*.log
+
+*.log
+
+nmapScan.log

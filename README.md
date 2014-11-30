@@ -29,7 +29,18 @@ Make sure you start the db server with:
 
 This will allow you to connect to it. 
 
-You can track clients from the command line tool.
+You can track clients from the command line tool `mongo`. Now list the databases and select one for use.
+
+	> show dbs
+	admin    (empty)
+	local    0.078GB
+	network  0.078GB
+	test     (empty)
+	> use network
+	switched to db network
+	> db.network.find().count()
+	11
+	>
 
 How many machines found to date:
     
@@ -46,6 +57,10 @@ List all machines found:
 Delete all records and start over:
     
     db.network.remove('')
+
+Insert a new record `host`.
+
+    db.network.insert( host )
 
 ## To Do
 
