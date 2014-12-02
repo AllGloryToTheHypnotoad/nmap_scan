@@ -1,0 +1,70 @@
+28:0D:FC:41:24:44:
+  hostname: ''
+  ip: 192.168.1.15
+  lastseen: 20141130-21:02
+  status: up
+  vendor: [Sony Computer Entertainment]
+58:b0:35:f2:25:d8:
+  hostname: ''
+  ip: 192.168.1.4
+  lastseen: 20141130-21:01
+  status: up
+  tcp: {'22': ssh, '548': afp, '88': kerberos-sec}
+  vendor: []
+5C:95:AE:93:2F:A5:
+  hostname: ''
+  ip: 192.168.1.5
+  lastseen: 20141130-21:01
+  status: up
+  vendor: [Apple]
+6C:70:9F:CE:DA:85:
+  hostname: ''
+  ip: 192.168.1.18
+  lastseen: 20141130-21:02
+  status: up
+  vendor: [Apple]
+78:7E:61:CB:2B:52:
+  firstseen: 20141130-21:02
+  hostname: ''
+  ip: 192.168.1.14
+  lastseen: 20141130-21:02
+  status: up
+  vendor: []
+7C:D1:C3:4A:13:2C:
+  hostname: ''
+  ip: 192.168.1.12
+  lastseen: 20141130-21:01
+  status: up
+  vendor: [Apple]
+8C:2D:AA:75:EE:3B:
+  hostname: ''
+  ip: 192.168.1.23
+  lastseen: 20141130-21:02
+  status: up
+  vendor: [Apple]
+8C:2D:AA:A1:33:AF:
+  hostname: ''
+  ip: 192.168.1.10
+  lastseen: 20141130-21:01
+  status: up
+  vendor: [Apple]
+B8:17:C2:D3:64:B8:
+  hostname: ''
+  ip: 192.168.1.2
+  lastseen: 20141130-21:01
+  status: up
+  tcp: {'5000': upnp}
+  vendor: [Apple]
+B8:27:EB:0A:5A:17:
+  hostname: ''
+  ip: 192.168.1.17
+  lastseen: 20141130-21:02
+  status: up
+  tcp: {'22': ssh, '548': afp}
+  vendor: [Raspberry Pi Foundation]
+C8:2A:14:1F:18:69:
+  hostname: ''
+  ip: 192.168.1.13
+  lastseen: 20141130-21:02
+  status: up
+  vendor: [Apple]

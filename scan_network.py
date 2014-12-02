@@ -10,65 +10,73 @@ from multiprocessing import Process
 import multiprocessing
 import socket
 from awake import wol
-import pymongo
-import pprint
+#import pymongo
+import pprint as pp
 import datetime
 import time
 import logging
 import re
 import uuid
 
-"""
-{
-	"_id" : ObjectId("540ceb098fc886adbd2a336c"),
-	"status" : {
-		"state" : "up",
-		"reason" : "arp-response"
-	},
-	"vendor" : {
-		"90:B9:31:EC:AA:46" : "Apple"
-	},
-	"ip" : "192.168.1.9",
-	"hostname" : "",
-	"tcp" : {
-		"62078" : {
-			"product" : "",
-			"state" : "open",
-			"version" : "",
-			"name" : "iphone-sync",
-			"conf" : "3",
-			"extrainfo" : "",
-			"reason" : "syn-ack",
-			"cpe" : ""
-		}
-	},
-	"mac" : "90:B9:31:EC:AA:46",
-	"lastseen" : ISODate("2014-09-07T17:32:25.380Z")
-}
+import yaml
+
+class YamlDoc:	
+	def read(self,filename):
+		# need better testing, breaks if file missing
+		try:
+			f = open(filename,'r')
+			file = yaml.safe_load(f)
+			f.close()
+		except IOError:
+			file = dict()
+			print 'ioerror'
+		return file
+		
+	def write(self,filename,data):
+		f = open(filename,'w')
+		yaml.safe_dump(data,f)
+		f.close()
+		
+
 
 """
+DEBUG:nmapScan:Hosts file: {u'192.168.1.17': {'status': {'state': u'up', 'reason': u'arp-response'}, 'hostname': '', 'vendor': {u'B8:27:EB:0A:5A:17': u'Raspberry Pi Foundation'}, 'addresses': {u'mac': u'B8:27:EB:0A:5A:17', u'ipv4': u'192.168.1.17'}, u'tcp': {548: {'product': u'Netatalk', 'state': u'open', 'version': u'2.2.2', 'name': u'afp', 'conf': u'10', 'extrainfo': u'name: calculon; protocol 3.3', 'reason': u'syn-ack', 'cpe': u'cpe:/a:netatalk:netatalk:2.2.2'}, 22: {'product': u'OpenSSH', 'state': u'open', 'version': u'6.0p1 Debian 4+deb7u2', 'name': u'ssh', 'conf': u'10', 'extrainfo': u'protocol 2.0', 'reason': u'syn-ack', 'cpe': u'cpe:/o:linux:linux_kernel'}}}}
+DEBUG:nmapScan:Hosts file: {u'192.168.1.15': {'status': {'state': u'up', 'reason': u'arp-response'}, 'hostname': '', 'vendor': {u'28:0D:FC:41:24:44': u'Sony Computer Entertainment'}, 'addresses': {u'mac': u'28:0D:FC:41:24:44', u'ipv4': u'192.168.1.15'}}}
+
+change DataBase to a dict due to the small number of computers on local network.
+
+{
+	"90:B9:31:EC:AA:46": {
+		"vendor": "Apple",
+		"ip": "123.122.1.1",
+		"hostname": "billy-bob",
+		"tcp": { "123": "something", ... },
+		"lastseen" : "12 aug 2012"
+	}
+}
+"""
 class DataBase:
-	def __init__(self,db_name,srvr='localhost',port=27017):
-		client = pymongo.MongoClient(srvr, port)
-		self.db = client[db_name]
+	def __init__(self,filename):
+		y = YamlDoc()
+		self.db = y.read(filename)
+		if (self.db) != dict:
+			self.db = dict()
+		self.filename = filename
 	
 	"""
 	Determine if a document already exists
 	in: db and query_doc
 	out: boolean
 	"""
-	def exist(self,doc):
-		num = self.db.network.find( doc ).count()
-		ans = False
-		if num > 0: ans = True
+	def exist(self,mac):
+		ans = mac in self.db
 		return ans
 	
-	def insert(self,doc):
-		print 'insert'
-		#self.db.network.insert(doc)
+	def insert(self,dic):
+		self.db.update(dic)
 	
 	def find(self,doc):
-		return self.db.network.find_one(doc)
+		return self.db[doc]
 	
 	"""
 	Return all hosts
@@ -76,18 +84,11 @@ class DataBase:
 	out: dict of everything
 	"""
 	def getAll(self):
-		return self.db.network.find()
+		return self.db
 		
-	"""
-	Search db for MAC address
-	in: db and query_doc
-	out: boolean and MAC address
-	"""
-	def getMAC(self,doc):
-		rec = self.db.network.find_one( doc )
-		if not rec:
-			return False,0
-		return True, rec['mac']
+	def save(self,filename):
+		y = YamlDoc()
+		y.write( filename, self.db )
 
 class IP:
 	def __init__(self):
@@ -121,13 +122,23 @@ class IP:
 	"""
 	def getHostMAC(self):
 		return  ':'.join(re.findall('..', '%012x' % uuid.getnode()))
+	
+	"""
+	Gets all of the network info
+	in: none
+	out: dict with ip, mac, and network info
+	"""
+	def getAll(self):
+		ans = {'ip': self.ip, 'mac': self.mac, 'network': self.network }
+		return ans
 
 
 
 class Nmap:
 	def __init__(self):
-		self.db = DataBase('network')
+		self.db = DataBase('hosts.yaml')
 		self.ip = IP()
+		self.net = IP().getAll()
 		
 		#logging.basicConfig(level=logging.INFO)
 		self.log = logging.getLogger('nmapScan')
@@ -138,11 +149,14 @@ class Nmap:
 	out: none
 	"""
 	def nmapScan(self,host):
-		p = multiprocessing.current_process()
+		#p = multiprocessing.current_process()
 		nm = nmap.PortScanner()
-		scan = nm.scan(host)
 		
-		self.log.debug('Scan results: %s'%(scan))
+		# http://nmap.org/book/man-briefoptions.html
+		# -sS TCP SYN
+		# -O OS detection
+		# -F faster scan mode, fewer ports searched 
+		scan = nm.scan(host,arguments=' -sS -O -F')
 		
 		# grab the computer host info
 		hosts = scan['scan']
@@ -152,32 +166,36 @@ class Nmap:
 			#self.log.info('[-] %s is DOWN, shutting down process %d'%(p.name,p.pid))
 			return
 		
-		self.log.debug('Hosts file: %s'%(hosts))
-		
 		for key, h in hosts.iteritems():
-			self.log.info('[+] %s is UP, in process %d'%(key,p.pid))
-		
-			# need to the MAC address
+			#self.log.info('[+] %s is UP, in process %d'%(key,p.pid))
+			
+			# need to get the MAC address
 			if 'mac' not in h['addresses']:
 				if self.ip.ip == key:
-					#self.log.error("[-] can't grab MAC of localhost -- FIXME!!")
 					self.log.info("[*] can't grab MAC of localhost -- fixing manually")
 					mac = self.ip.mac
 					h['addresses']['mac'] = mac
 				else:
 					self.log.error('[-] Could not get MAC for %s'%(key))
 					return
-		
+			
 			# nmap stores the ip and mac addr in addresses, this makes 
 			# searching hard, so I pull them out	
-			search_key = {'mac' : h['addresses']['mac'] }
+			search_key = str(h['addresses']['mac'])			
+			comp = self.formatDoc(h)
 			
-			if not self.db.exist( search_key ):
-				comp = self.formatDoc(h)
-				comp['firstseen'] = datetime.datetime.now().strftime('%Y%m%d-%H:%M')
+			if self.db.exist( search_key ):
+				comp[search_key]['lastseen'] = str(datetime.datetime.now().strftime('%Y%m%d-%H:%M'))
+			else:
+				comp[search_key]['firstseen'] = str(datetime.datetime.now().strftime('%Y%m%d-%H:%M'))
 				#print 'insert'	
-				comp['lastseen'] = datetime.datetime.now().strftime('%Y%m%d-%H:%M')	
-				self.db.insert(comp)
+				comp[search_key]['lastseen'] = str(datetime.datetime.now().strftime('%Y%m%d-%H:%M'))
+				print '------- comp -------------'
+				print comp
+				#exit()
+				
+			self.db.insert(comp)
+				
 				
 	"""
 	Run through db and attempt to wake all previously known hosts
@@ -187,20 +205,15 @@ class Nmap:
 	def wakeAllComputers(self):
 		all = self.db.getAll()
 		
-		if all.count() == 0:
+		if len(all) == 0:
 			self.log.info('[*] Database empty')
 			return
 		
 		self.log.info('[*] Waking known computers:')
-		for h in all:
-			mac = h['mac']
-			wol.send_magic_packet(mac)
-			self.log.info('  > %s / %s'%(mac,h['ip']))
+		for mac in all.keys():
+			#wol.send_magic_packet(mac)
+			self.log.info('  > %s / %s'%(mac,all[mac]['ip']))
 		self.log.info('----------------------------')
-	
-	def printNetwork(self):
-		print 'hi'
-		#hosts = self.db.search({
 		
 	"""
 	Scan a network to detect hosts
@@ -215,43 +228,59 @@ class Nmap:
 		
 		try:
 			self.wakeAllComputers()
-			jobs=[]
+			#jobs=[]
 			for i in range(start,stop):
-				host = ip + str(i)				
-				#ret,mac = self.db.getMAC({'ip': host} )
-				#if ret:
-				#	wol.send_magic_packet(mac)
-				#	self.log.info('[*] Wake %s / %s'%(mac,host))
-				p = Process(target=self.nmapScan, args=(host,)) 
-				jobs.append(p)
-				p.start()
+				host = ip + str(i)			
+				#p = Process(target=self.nmapScan, args=(host,)) 
+				#jobs.append(p)
+				#p.start()
+				#p.join()
+				self.log.info('Scanning: %s'%host)
+				self.nmapScan(host)
+			self.db.save('hosts.yaml')
 		except Exception, e:
 			print e
 	
 	"""
 	Given the output from nmap, turn it into a dict for mongo. Note, have to convert keys
 	to strings (e.g., port numbers)
+	
+	Hosts file: {u'192.168.1.15': {'status': {'state': u'up', 'reason': u'arp-response'}, 'hostname': '', 'vendor': {u'28:0D:FC:41:24:44': u'Sony Computer Entertainment'}, 'addresses': {u'mac': u'28:0D:FC:41:24:44', u'ipv4': u'192.168.1.15'}}}
+	
+	{
+		"90:B9:31:EC:AA:46": {
+			"vendor": "Apple",
+			"ip": "123.122.1.1",
+			"hostname": "billy-bob",
+			"tcp": { "123": "something", ... },
+			"lastseen" : "12 aug 2012"
+		}
+	}
+	
 	in: nmap host info
 	out: dict
 	"""
 	def formatDoc(self,h):
+		print 'formatDoc --------------'
+		pp.pprint(h)
 		comp = {
-			'mac' : h['addresses']['mac'],
-			'ip' : h['addresses']['ipv4'],
-			#'hostname' : h['hostname'], 
-			#'status' : h['status']['state']
+			h['addresses']['mac']: {
+				'vendor':    h['vendor'].values(),
+				'ip' :       h['addresses']['ipv4'],
+				'hostname' : h['hostname'], 
+				'status' :   h['status']['state']
+			}
 		}
-	
+		
 		# need to convert port numbers to strings for mongodb
-# 		if 'tcp' in h:
-# 			tcp = {}
-# 			for k,v in h['tcp'].iteritems():
-# 				if v['product'] == '':
-# 					tcp[str(k)] = v['name'] 
-# 				else:
-# 					tcp[str(k)] = v['product'] 
-# 			comp['tcp'] = tcp
-		print comp
+		if 'tcp' in h:
+			tcp = {}
+			for k,v in h['tcp'].iteritems():
+				if v['product'] == '':
+					tcp[str(k)] = v['name'] 
+				else:
+					tcp[str(k)] = v['product'] 
+			comp[h['addresses']['mac']]['tcp'] = tcp
 		return comp
 
 
@@ -262,7 +291,7 @@ TODO:
 """
 def main():
 	# setup logger that processes will attach too
-	logging.basicConfig(level=logging.INFO)
+	logging.basicConfig(level=logging.DEBUG)
 	log = logging.getLogger('nmapScan')
 	
 	# create file handler
@@ -278,8 +307,8 @@ def main():
 	
 	try:
 		while True:
-			scan.scanRange(1,200)
-			time.sleep(5*60)
+			scan.scanRange(1,29)
+			time.sleep(5)
 			
 	except KeyboardInterrupt:
 		print 'bye ...'
